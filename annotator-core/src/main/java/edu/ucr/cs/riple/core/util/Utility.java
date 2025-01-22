@@ -303,4 +303,15 @@ public class Utility {
       throw new RuntimeException("Exception while reading file: " + path, e);
     }
   }
+
+  /**
+   * Check whether an annotation is a type-use annotation.
+   *
+   * @param annotName annotation name
+   * @return true if we annotName is a type-use annotation, false otherwise
+   */
+  public static boolean isTypeUseAnnotation(String annotName) {
+    return annotName.contains(".jspecify.annotations.Nullable")
+        || annotName.contains(".checkerframework.checker.nullness.qual.Nullable");
+  }
 }
