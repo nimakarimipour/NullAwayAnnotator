@@ -45,6 +45,8 @@ import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.util.Context;
+import edu.ucr.cs.riple.scanner.generatedcode.CodeAnnotationInfo;
 import edu.ucr.cs.riple.scanner.out.ClassRecord;
 import edu.ucr.cs.riple.scanner.out.ImpactedRegion;
 import edu.ucr.cs.riple.scanner.out.MethodRecord;
@@ -90,12 +92,15 @@ public class AnnotatorScanner extends BugChecker
     if (!context.getConfig().isActive()) {
       return Description.NO_MATCH;
     }
+    Symbol.ClassSymbol classSymbol = ASTHelpers.getSymbol(classTree);
+    if (classSymbol == null || isInGeneratedClass(classSymbol, visitorState.context)) {
+      return Description.NO_MATCH;
+    }
     context
         .getConfig()
         .getSerializer()
         .serializeClassRecord(
-            new ClassRecord(
-                ASTHelpers.getSymbol(classTree), visitorState.getPath().getCompilationUnit()));
+            new ClassRecord(classSymbol, visitorState.getPath().getCompilationUnit()));
     return Description.NO_MATCH;
   }
 
@@ -105,10 +110,14 @@ public class AnnotatorScanner extends BugChecker
     if (!config.isActive()) {
       return Description.NO_MATCH;
     }
+    Symbol.MethodSymbol methodSymbol = ASTHelpers.getSymbol(tree);
+    if (methodSymbol == null || isInGeneratedClass(methodSymbol, state.context)) {
+      return Description.NO_MATCH;
+    }
     config
         .getSerializer()
         .serializeImpactedRegionForMethod(
-            new ImpactedRegion(config, ASTHelpers.getSymbol(tree), state.getPath()));
+            new ImpactedRegion(config, methodSymbol, state.getPath()));
     return Description.NO_MATCH;
   }
 
@@ -122,14 +131,15 @@ public class AnnotatorScanner extends BugChecker
     if (methodSymbol == null) {
       throw new RuntimeException("not expecting unresolved method here");
     }
-    if (methodSymbol.owner.enclClass().getSimpleName().isEmpty()) {
+    if (methodSymbol.owner.enclClass().getSimpleName().isEmpty()
+        || isInGeneratedClass(methodSymbol, state.context)) {
       // An anonymous class cannot declare its own constructors, so we do not need to serialize it.
       return Description.NO_MATCH;
     }
     config
         .getSerializer()
         .serializeImpactedRegionForMethod(
-            new ImpactedRegion(config, ASTHelpers.getSymbol(tree), state.getPath()));
+            new ImpactedRegion(config, methodSymbol, state.getPath()));
     return Description.NO_MATCH;
   }
 
@@ -140,6 +150,9 @@ public class AnnotatorScanner extends BugChecker
       return Description.NO_MATCH;
     }
     Symbol.MethodSymbol methodSymbol = ASTHelpers.getSymbol(tree);
+    if (methodSymbol == null || isInGeneratedClass(methodSymbol, state.context)) {
+      return Description.NO_MATCH;
+    }
     serializeSymIfNonnull(methodSymbol);
     MethodRecord methodRecord = MethodRecord.findOrCreate(methodSymbol, context);
     methodRecord.findParent(state, context);
@@ -159,8 +172,12 @@ public class AnnotatorScanner extends BugChecker
     if (!context.getConfig().isActive()) {
       return Description.NO_MATCH;
     }
+    Symbol.VarSymbol varSymbol = ASTHelpers.getSymbol(tree);
+    if (varSymbol == null || isInGeneratedClass(varSymbol, state.context)) {
+      return Description.NO_MATCH;
+    }
     serializeSymIfField(ASTHelpers.getSymbol(tree.getInitializer()), state);
-    serializeSymIfNonnull(ASTHelpers.getSymbol(tree));
+    serializeSymIfNonnull(varSymbol);
     return Description.NO_MATCH;
   }
 
@@ -169,7 +186,11 @@ public class AnnotatorScanner extends BugChecker
     if (!context.getConfig().isActive()) {
       return Description.NO_MATCH;
     }
-    serializeSymIfField(ASTHelpers.getSymbol(tree), state);
+    Symbol symbol = ASTHelpers.getSymbol(tree);
+    if (symbol == null || isInGeneratedClass(symbol, state.context)) {
+      return Description.NO_MATCH;
+    }
+    serializeSymIfField(symbol, state);
     return Description.NO_MATCH;
   }
 
@@ -178,7 +199,11 @@ public class AnnotatorScanner extends BugChecker
     if (!context.getConfig().isActive()) {
       return Description.NO_MATCH;
     }
-    serializeSymIfField(ASTHelpers.getSymbol(tree), state);
+    Symbol symbol = ASTHelpers.getSymbol(tree);
+    if (symbol == null || isInGeneratedClass(symbol, state.context)) {
+      return Description.NO_MATCH;
+    }
+    serializeSymIfField(symbol, state);
     return Description.NO_MATCH;
   }
 
@@ -210,6 +235,9 @@ public class AnnotatorScanner extends BugChecker
     serializeImpactedRegionForFunctionalInterface(config, memberReferenceTree, visitorState);
     if (memberReferenceTree instanceof JCTree.JCMemberReference) {
       Symbol calledMethod = ((JCTree.JCMemberReference) memberReferenceTree).sym;
+      if (calledMethod == null || isInGeneratedClass(calledMethod, visitorState.context)) {
+        return Description.NO_MATCH;
+      }
       if (calledMethod instanceof Symbol.MethodSymbol) {
         // serialize the called method: "bar()"
         context
@@ -284,5 +312,17 @@ public class AnnotatorScanner extends BugChecker
     config
         .getSerializer()
         .serializeImpactedRegionForMethod(new ImpactedRegion(config, methodSym, state.getPath()));
+  }
+
+  /**
+   * Checks if the given symbol is in a generated class.
+   *
+   * @param symbol Given symbol.
+   * @param context Error prone context.
+   * @return True if the symbol is in a generated class, false otherwise.
+   */
+  private boolean isInGeneratedClass(Symbol symbol, Context context) {
+    CodeAnnotationInfo codeAnnotationInfo = CodeAnnotationInfo.instance(context);
+    return codeAnnotationInfo.isInGeneratedClass(symbol);
   }
 }

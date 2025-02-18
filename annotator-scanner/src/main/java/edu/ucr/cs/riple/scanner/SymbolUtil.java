@@ -256,4 +256,22 @@ public class SymbolUtil {
     Type funcInterfaceType = ((JCTree.JCFunctionalExpression) tree).type;
     return (Symbol.MethodSymbol) types.findDescriptorSymbol(funcInterfaceType.tsym);
   }
+
+  /**
+   * NOTE: THIS SOURCE FILE IS COPIED AND MODIFIED FROM UBER <a
+   * href="https://github.com/uber/NullAway">NULLAWAY</a> SOURCE CODE
+   *
+   * <p>A wrapper for {@link ASTHelpers#hasDirectAnnotationWithSimpleName(Symbol, String)} to avoid
+   * binary compatibility issues with new overloads in recent Error Prone versions. NullAway code
+   * should only use this method and not call the corresponding ASTHelpers methods directly.
+   *
+   * <p>TODO: delete this method and switch to ASTHelpers once we can require Error Prone 2.24.0
+   *
+   * @param sym the symbol
+   * @param simpleName the simple name
+   * @return {@code true} iff the symbol has a direct annotation with the given simple name
+   */
+  public static boolean hasDirectAnnotationWithSimpleName(Symbol sym, String simpleName) {
+    return ASTHelpers.hasDirectAnnotationWithSimpleName(sym, simpleName);
+  }
 }
